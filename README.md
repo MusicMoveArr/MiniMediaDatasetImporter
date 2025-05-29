@@ -11,7 +11,7 @@ Using this tool to insert the entire dataset into postgres from MusicBrainz will
 
 # Usage example to import all artists from artist file
 ```
-dotnet importmusicbrainz \
+dotnet MiniMediaDatasetImporter.dll importmusicbrainz \
 --connection-string "Host=192.168.1.1;Username=postgres;Password=postgres;Database=minimedia;Pooling=true;MinPoolSize=5;MaxPoolSize=100;" \
 --file "~/dataset/artist"
 ```
