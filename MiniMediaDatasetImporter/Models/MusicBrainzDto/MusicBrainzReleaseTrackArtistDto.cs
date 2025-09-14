@@ -1,4 +1,4 @@
-namespace MiniMediaDatasetImporter.Models;
+namespace MiniMediaDatasetImporter.Models.MusicBrainzDto;
 
 public class MusicBrainzReleaseTrackArtistDto
 {

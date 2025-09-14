@@ -4,6 +4,7 @@ using DapperBulkQueries.Npgsql;
 using MiniMediaDatasetImporter.Helpers;
 using MiniMediaDatasetImporter.Models;
 using MiniMediaDatasetImporter.Models.MusicBrainz;
+using MiniMediaDatasetImporter.Models.MusicBrainzDto;
 using MiniMediaDatasetImporter.Repositories;
 using Npgsql;
 using Spectre.Console;
