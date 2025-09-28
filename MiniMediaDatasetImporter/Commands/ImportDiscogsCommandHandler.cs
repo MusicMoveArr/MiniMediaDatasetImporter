@@ -166,6 +166,46 @@ public class ImportDiscogsCommandHandler
         "Position", 
         "Duration"
     };
+
+    private readonly List<string> _masterColumns = new()
+    {
+        "Id", 
+        "MainReleaseId", 
+        "Year", 
+        "Title", 
+        "DataQuality", 
+        "LastSyncTime"
+    };
+
+    private readonly List<string> _masterArtistsColumns = new()
+    {
+        "MasterId", 
+        "ArtistId", 
+        "JoinText", 
+        "SortIndex"
+    };
+
+    private readonly List<string> _masterGenreColumns = new()
+    {
+        "MasterId", 
+        "Genre"
+    };
+
+    private readonly List<string> _masterStylesColumns = new()
+    {
+        "MasterId", 
+        "Style"
+    };
+
+    private readonly List<string> _masterVideosColumns = new()
+    {
+        "MasterId", 
+        "Duration", 
+        "Embed", 
+        "Source", 
+        "Title", 
+        "Description"
+    };
     
     public ImportDiscogsCommandHandler(string connectionString)
     {
@@ -184,10 +224,10 @@ public class ImportDiscogsCommandHandler
         {
             await ImportLabelFileAsync(fileInfo);
         }
-        //else if (fileInfo.Name.EndsWith("_masters.xml"))
-        //{
-        //    await ImportMastersFileAsync(fileInfo);
-        //}
+        else if (fileInfo.Name.EndsWith("_masters.xml"))
+        {
+            await ImportMastersFileAsync(fileInfo);
+        }
         else if (fileInfo.Name.EndsWith("_releases.xml"))
         {
             await ImportReleaseFileAsync(fileInfo);
@@ -517,19 +557,79 @@ public class ImportDiscogsCommandHandler
     private async Task ImportMastersFileAsync(FileInfo fileInfo)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
+        var discogsMastersToInsert = new List<DiscogsMasterDto>();
+        var discogsMasterGenresToInsert = new List<DiscogsMasterGenreDto>();
+        var discogsMasterArtistsToInsert = new List<DiscogsMasterArtistDto>();
+        var discogsMasterStylesToInsert = new List<DiscogsMasterStyleDto>();
+        var discogsMasterVideosToInsert = new List<DiscogsMasterVideoDto>();
         
-        int importReleaseCount = 0;
-        int importTracksCount = 0;
+        int importMasterCount = 0;
+        
         await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
-            .StartAsync(Markup.Escape($"Importing releases"), async ctx =>
+            .StartAsync(Markup.Escape($"Importing masters"), async ctx =>
             {
                 await ReadXmlHelper.ReadByLineAsync<Master>(fileInfo.FullName, "master", async (masterInfo) =>
                 {
+                    discogsMastersToInsert.Add(new DiscogsMasterDto
+                    {
+                        Id = masterInfo.Id,
+                        DataQuality = masterInfo.DataQuality ?? string.Empty,
+                        LastSyncTime = DateTime.Now,
+                        MainReleaseId = masterInfo.MainRelease,
+                        Title = masterInfo.Title ?? string.Empty,
+                        Year = masterInfo.Year ?? 0
+                    });
                     
-                    ctx.Status(Markup.Escape($"Importing {importReleaseCount++} masters"));
+                    discogsMasterGenresToInsert.AddRange(masterInfo.Genres.Select(genre => new DiscogsMasterGenreDto
+                    {
+                        MasterId = masterInfo.Id,
+                        Genre = genre.Genre
+                    }));
+                    
+                    discogsMasterStylesToInsert.AddRange(masterInfo.Styles.Select(style => new DiscogsMasterStyleDto
+                    {
+                        MasterId = masterInfo.Id,
+                        Style = style.Style
+                    }));
+                    
+                    discogsMasterVideosToInsert.AddRange(masterInfo.Videos.Select(video => new DiscogsMasterVideoDto
+                    {
+                        MasterId = masterInfo.Id,
+                        Title = video.Title ?? string.Empty,
+                        Description = video.Description ?? string.Empty,
+                        Duration = video.Duration ?? string.Empty,
+                        Embed = video.Embed,
+                        Source = video.Source ?? string.Empty
+                    }));
+
+                    int artistIndex = 0;
+                    foreach (var artist in masterInfo.Artists)
+                    {
+                        discogsMasterArtistsToInsert.Add(new DiscogsMasterArtistDto
+                        {
+                            MasterId = masterInfo.Id,
+                            ArtistId = artist.Id,
+                            JoinText = artist.Join ?? string.Empty,
+                            SortIndex = artistIndex
+                        });
+                    }
+                    
+                    await BulkInsertAsync(discogsMastersToInsert, conn, "discogs_master", _masterColumns, BulkInsert);
+                    await BulkInsertAsync(discogsMasterGenresToInsert, conn, "discogs_master_genre", _masterGenreColumns, BulkInsert);
+                    await BulkInsertAsync(discogsMasterArtistsToInsert, conn, "discogs_master_artist", _masterArtistsColumns, BulkInsert);
+                    await BulkInsertAsync(discogsMasterStylesToInsert, conn, "discogs_master_style", _masterStylesColumns, BulkInsert);
+                    await BulkInsertAsync(discogsMasterVideosToInsert, conn, "discogs_master_video", _masterVideosColumns, BulkInsert);
+                    
+                    ctx.Status(Markup.Escape($"Importing {importMasterCount++} masters"));
                 });
             });
+                    
+        await BulkInsertAsync(discogsMastersToInsert, conn, "discogs_master", _masterColumns, 0);
+        await BulkInsertAsync(discogsMasterGenresToInsert, conn, "discogs_master_genre", _masterGenreColumns, 0);
+        await BulkInsertAsync(discogsMasterArtistsToInsert, conn, "discogs_master_artist", _masterArtistsColumns, 0);
+        await BulkInsertAsync(discogsMasterStylesToInsert, conn, "discogs_master_style", _masterStylesColumns, 0);
+        await BulkInsertAsync(discogsMasterVideosToInsert, conn, "discogs_master_video", _masterVideosColumns, 0);
     }
 
     private async Task BulkInsertAsync<DtoType>(

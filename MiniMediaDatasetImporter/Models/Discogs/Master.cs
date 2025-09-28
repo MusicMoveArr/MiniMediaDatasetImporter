@@ -6,7 +6,7 @@ namespace MiniMediaDatasetImporter.Models.Discogs;
 public class Master
 {
     [XmlAttribute("id")]
-    public string Id { get; set; }
+    public int Id { get; set; }
     
     [XmlElement("main_release")]
     public int MainRelease { get; set; }
@@ -24,13 +24,13 @@ public class Master
     public List<MasterStyle> Styles { get; set; }
     
     [XmlElement("year")]
-    public int Year { get; set; }
+    public int? Year { get; set; }
     
     [XmlElement("title")]
-    public string Title { get; set; }
+    public string? Title { get; set; }
     
     [XmlElement("data_quality")]
-    public string DataQuality { get; set; }
+    public string? DataQuality { get; set; }
     
     [XmlArray("videos")]
     [XmlArrayItem("video")]

@@ -11,5 +11,5 @@ public class MasterArtist
     public string Name { get; set; }
     
     [XmlElement("join")]
-    public string Join { get; set; }
+    public string? Join { get; set; }
 }
