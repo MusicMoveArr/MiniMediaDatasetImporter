@@ -1,7 +1,9 @@
 # MiniMedia Dataset Importer
-A simple dataset import tool to import (for now) only MusicBrainz dataset
+A simple dataset import tool to import MusicBrainz, Discogs datasets
 
 You can download the dataset from MusicBrainz at https://metabrainz.org/datasets/download
+
+Download the discogs dadaset here https://discogs-data-dumps.s3.us-west-2.amazonaws.com/index.html
 
 Using this tool to insert the entire dataset into postgres from MusicBrainz will take aprox ~10hours (depending on hardware of course)
 
