@@ -65,6 +65,32 @@ public class ImportMusicBrainzCommandHandler
         "LabelId", 
         "CatalogNumber"
     };
+    private readonly List<string> _artistColumns = new()
+    {
+        "ArtistId", 
+        "ReleaseCount", 
+        "Name", 
+        "Type", 
+        "Country", 
+        "SortName", 
+        "Disambiguation", 
+        "LastSyncTime"
+    };
+    private readonly List<string> _labelColumns = new()
+    {
+        "LabelId", 
+        "AreaId", 
+        "Name", 
+        "Disambiguation", 
+        "LabelCode", 
+        "Type", 
+        "LifeSpanBegin", 
+        "LifeSpanEnd", 
+        "LifeSpanEnded", 
+        "SortName", 
+        "TypeId", 
+        "Country"
+    };
     
     public ImportMusicBrainzCommandHandler(string connectionString)
     {
@@ -100,28 +126,74 @@ public class ImportMusicBrainzCommandHandler
             .Spinner(Spinner.Known.Dots)
             .StartAsync(Markup.Escape($"Importing artists"), async ctx =>
             {
+                List<MusicBrainzArtistInfoModel> artistModels = new List<MusicBrainzArtistInfoModel>();
+                
                 await ReadJsonLineHelper.ReadByLineAsync<MusicBrainzArtistInfoModel>(fileInfo.FullName, async (artistInfo) =>
                 {
                     if (!Guid.TryParse(artistInfo.Id, out var artistId))
                     {
                         return;
                     }
+                    
+                    artistModels.Add(artistInfo);
 
-                    if (await _artistRepository.ArtistExistsByIdAsync(artistId))
+                    if (artistModels.Count > 1000)
                     {
-                        return;
+                        var artistIds = artistModels
+                            .Select(artist => Guid.Parse(artist.Id))
+                            .ToList();
+                        artistIds = await _artistRepository.GetArtistIdsToInsertAsync(artistIds);
+                        
+                        await ProcessArtistsAsync(artistModels
+                            .Where(artist => artistIds.Contains(Guid.Parse(artist.Id)))
+                            .ToList());
+                        artistModels.Clear();
                     }
-                    await _artistRepository.UpsertArtistAsync(artistId, 
-                        artistInfo.Name, 
-                        artistInfo.Type, 
-                        artistInfo.Country, 
-                        artistInfo.SortName, 
-                        artistInfo.Disambiguation);
                     
                     ctx.Status(Markup.Escape($"Imported {importCount++} artists"));
                 });
+                
+                if (artistModels.Any())
+                {
+                    var artistIds = artistModels
+                        .Select(artist => Guid.Parse(artist.Id))
+                        .ToList();
+                    artistIds = await _artistRepository.GetArtistIdsToInsertAsync(artistIds);
+                        
+                    await ProcessArtistsAsync(artistModels
+                        .Where(artist => artistIds.Contains(Guid.Parse(artist.Id)))
+                        .ToList());
+                    artistModels.Clear();
+                }
             });
     }
+
+    private async Task ProcessArtistsAsync(List<MusicBrainzArtistInfoModel> artistModels)
+    {
+        var models = artistModels
+            .Select(artistInfo => new MusicBrainzArtistDto
+            {
+                ArtistId = Guid.Parse(artistInfo.Id),
+                ReleaseCount = 0,
+                Name = artistInfo.Name ?? string.Empty,
+                Type = artistInfo.Type ?? string.Empty,
+                Country = artistInfo.Country ?? string.Empty,
+                SortName = artistInfo.SortName ?? string.Empty,
+                Disambiguation = artistInfo.Disambiguation ?? string.Empty,
+                LastSyncTime = new DateTime(2000, 1, 1)
+            }).ToList();
+        
+        if (models.Any())
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.ExecuteBulkInsertAsync(
+                "musicbrainz_artist",
+                models,
+                _artistColumns, 
+                onConflict: OnConflict.DoNothing);
+        }
+    }
+    
 
     private async Task ImportLabelFileAsync(FileInfo fileInfo)
     {
@@ -130,6 +202,7 @@ public class ImportMusicBrainzCommandHandler
             .Spinner(Spinner.Known.Dots)
             .StartAsync(Markup.Escape($"Importing labels"), async ctx =>
             {
+                List<MusicBrainzLabelInfoLabelModel> labelModels = new List<MusicBrainzLabelInfoLabelModel>();
                 await ReadJsonLineHelper.ReadByLineAsync<MusicBrainzLabelInfoLabelModel>(fileInfo.FullName, async (labelInfo) =>
                 {
                     if (!Guid.TryParse(labelInfo.Id, out var labelId))
@@ -137,29 +210,68 @@ public class ImportMusicBrainzCommandHandler
                         return;
                     }
 
-                    Guid.TryParse(labelInfo.Area?.Id, out var areaId);
+                    labelModels.Add(labelInfo);
 
-                    if (await _labelRepository.LabelExistsAsync(labelId))
+                    if (labelModels.Count > 1000)
                     {
-                        return;
+                        var labelIds = labelModels
+                            .Select(artist => Guid.Parse(artist.Id))
+                            .ToList();
+                        labelIds = await _labelRepository.GetLabelIdsToInsertAsync(labelIds);
+                        
+                        await ProcessLabelsAsync(labelModels
+                            .Where(label => labelIds.Contains(Guid.Parse(label.Id)))
+                            .ToList());
+                        labelModels.Clear();
                     }
-                    await _labelRepository.UpsertLabelAsync(labelId, 
-                        areaId, 
-                        labelInfo.Name ?? string.Empty, 
-                        labelInfo.Disambiguation ?? string.Empty,
-                        labelInfo.LabelCode ?? 0, 
-                        labelInfo.Type ?? string.Empty,
-                        labelInfo.LifeSpan?.Begin ?? string.Empty,
-                        labelInfo.LifeSpan?.End ?? string.Empty,
-                        labelInfo.LifeSpan?.Ended ?? false,
-                        labelInfo.SortName ?? string.Empty,
-                        labelInfo.TypeId ?? string.Empty,
-                        labelInfo.Country ?? string.Empty
-                        );
                     
                     ctx.Status(Markup.Escape($"Imported {importCount++} labels"));
                 });
+                
+                if (labelModels.Any())
+                {
+                    var labelIds = labelModels
+                        .Select(artist => Guid.Parse(artist.Id))
+                        .ToList();
+                    labelIds = await _labelRepository.GetLabelIdsToInsertAsync(labelIds);
+                        
+                    await ProcessLabelsAsync(labelModels
+                        .Where(label => labelIds.Contains(Guid.Parse(label.Id)))
+                        .ToList());
+                    labelModels.Clear();
+                }
             });
+    }
+
+    private async Task ProcessLabelsAsync(List<MusicBrainzLabelInfoLabelModel> labelModels)
+    {
+        var models = labelModels
+            .Select(labelInfo => new MusicBrainzLabelDto
+            {
+                LabelId = Guid.Parse(labelInfo.Id),
+                AreaId = Guid.TryParse(labelInfo.Area?.Id, out var areaId) ? areaId : Guid.Empty,
+                Name = labelInfo.Name ?? string.Empty,
+                Disambiguation = labelInfo.Disambiguation ?? string.Empty,
+                LabelCode = labelInfo.LabelCode ?? 0,
+                Type = labelInfo.Type ?? string.Empty,
+                LifeSpanBegin = labelInfo.LifeSpan?.Begin ?? string.Empty,
+                LifeSpanEnd = labelInfo.LifeSpan?.End ?? string.Empty,
+                LifeSpanEnded = labelInfo.LifeSpan?.Ended ?? false,
+                SortName = labelInfo.SortName ?? string.Empty,
+                TypeId = labelInfo.TypeId ?? string.Empty,
+                Country = labelInfo.Country ?? string.Empty,
+                
+            }).ToList();
+        
+        if (models.Any())
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.ExecuteBulkInsertAsync(
+                "musicbrainz_label",
+                models,
+                _labelColumns, 
+                onConflict: OnConflict.DoNothing);
+        }
     }
 
     private async Task ImportReleaseFileAsync(FileInfo fileInfo)

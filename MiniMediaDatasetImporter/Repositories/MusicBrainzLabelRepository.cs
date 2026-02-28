@@ -11,6 +11,25 @@ public class MusicBrainzLabelRepository
         _connectionString = connectionString;
     }
     
+    public async Task<List<Guid>> GetLabelIdsToInsertAsync(List<Guid> labelIds)
+    {
+        string query = @"SELECT LabelId
+                         FROM musicbrainz_label
+                         WHERE LabelId = ANY(@labelIds)";
+        
+        await using var conn = new NpgsqlConnection(_connectionString);
+
+        var existingLabelIds = await conn
+            .QueryAsync<Guid>(query, new
+            {
+                labelIds
+            });
+
+        return labelIds
+            .Except(existingLabelIds)
+            .ToList();
+    }
+    
     public async Task UpsertLabelAsync(
         Guid labelId, 
         Guid areaId, 

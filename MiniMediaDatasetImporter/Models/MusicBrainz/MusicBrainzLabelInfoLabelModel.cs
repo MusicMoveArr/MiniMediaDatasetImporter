@@ -5,7 +5,7 @@ namespace MiniMediaDatasetImporter.Models.MusicBrainz;
 
 public class MusicBrainzLabelInfoLabelModel
 {
-    public string Name { get; set; }
+    public string? Name { get; set; }
     public string? Disambiguation { get; set; }
     public string Id { get; set; }
     
